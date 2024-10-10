@@ -21,9 +21,9 @@
    ```sh
    pip install -r requirements.txt
    ```
-3. Запустите Python-скрипт:
+3. Запустите:
    ```sh
-   python pca_analysis.py
+   report.ipynb
    ```
 
 ## Пример использования
