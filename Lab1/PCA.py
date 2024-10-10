@@ -2,89 +2,161 @@ import numpy as np
 
 class PCA:
     def __init__(self, X):
-        # Центрируем матрицу
+        # Center the data
         self.X = X - np.mean(X, axis=0)
-        self.n, self.m = self.X.shape
+        self.n_samples, self.n_features = self.X.shape
 
-    def pca_svd(self):
-        # Основной метод PCA на основе сингулярного разложения
-        # QR-алгоритм для собственных значений и векторов
-        cov_matrix = np.dot(self.X.T, self.X)
-        eigenvalues, eigenvectors = self.qr_algorithm(cov_matrix)
-        return self.transform_data(eigenvectors)
+    def pca_qr(self, n_components=None, num_iterations=1000):
+        """
+        PCA using the QR algorithm to compute eigenvalues and eigenvectors of the covariance matrix.
+        """
+        # Compute the covariance matrix
+        cov_matrix = np.dot(self.X.T, self.X) / (self.n_samples - 1)
 
-    def fast_pca(self):
-        # Метод PCA с асимптотически более быстрой реализацией
-        # Используем метод мощности для вычисления наибольших собственных значений и векторов
-        cov_matrix = np.dot(self.X.T, self.X)
-        eigenvalues, eigenvectors = self.power_iteration(cov_matrix, num_eigenvectors=min(self.m, 10))
-        return self.transform_data(eigenvectors)
+        # Use QR algorithm to compute eigenvalues and eigenvectors
+        eigenvalues, eigenvectors = self.qr_algorithm(cov_matrix, num_iterations=num_iterations)
 
-    def kernel_pca(self, kernel='rbf', gamma=0.1):
-        # Метод Kernel PCA для нелинейно-неразделимых данных
-        K = self.calculate_kernel(self.X, kernel, gamma)
-        # QR-разложение матрицы K
-        eigenvalues, eigenvectors = self.qr_algorithm(K)
-        return self.transform_data(eigenvectors)
+        # Sort eigenvalues and eigenvectors in descending order
+        idx = np.argsort(eigenvalues)[::-1]
+        eigenvalues = eigenvalues[idx]
+        eigenvectors = eigenvectors[:, idx]
 
-    def calculate_kernel(self, X, kernel, gamma):
+        # Select the top n_components
+        if n_components is not None:
+            eigenvectors = eigenvectors[:, :n_components]
+            eigenvalues = eigenvalues[:n_components]
+
+        # Transform the data
+        transformed_data = np.dot(self.X, eigenvectors)
+
+        return transformed_data, eigenvalues, eigenvectors
+
+    def fast_pca(self, n_components=None):
+        """
+        PCA using an asymptotically faster algorithm (SVD).
+        """
+        # Compute SVD of the centered data matrix
+        U, S, VT = np.linalg.svd(self.X, full_matrices=False)
+        eigenvalues = (S ** 2) / (self.n_samples - 1)
+        eigenvectors = VT.T
+
+        # Sort eigenvalues and eigenvectors in descending order
+        idx = np.argsort(eigenvalues)[::-1]
+        eigenvalues = eigenvalues[idx]
+        eigenvectors = eigenvectors[:, idx]
+        U = U[:, idx]
+        S = S[idx]
+
+        # Select the top n_components
+        if n_components is not None:
+            eigenvectors = eigenvectors[:, :n_components]
+            eigenvalues = eigenvalues[:n_components]
+            U = U[:, :n_components]
+            S = S[:n_components]
+
+        # Transform the data
+        transformed_data = U * S
+
+        return transformed_data, eigenvalues, eigenvectors
+
+    def kernel_pca(self, kernel='rbf', gamma=None, degree=3, coef0=1, n_components=None):
+        """
+        Kernel PCA using the specified kernel function.
+        """
+        # Compute the kernel matrix
+        K = self._calculate_kernel(self.X, kernel=kernel, gamma=gamma, degree=degree, coef0=coef0)
+
+        # Center the kernel matrix
+        K_centered = self._center_kernel(K)
+
+        # Compute eigenvalues and eigenvectors
+        eigenvalues, eigenvectors = self._eigen_decomposition(K_centered)
+
+        # Sort eigenvalues and eigenvectors in descending order
+        idx = np.argsort(eigenvalues)[::-1]
+        eigenvalues = eigenvalues[idx]
+        eigenvectors = eigenvectors[:, idx]
+
+        # Select the top n_components
+        if n_components is not None:
+            eigenvectors = eigenvectors[:, :n_components]
+            eigenvalues = eigenvalues[:n_components]
+
+        # Normalize eigenvectors
+        eigenvectors = eigenvectors / np.sqrt(eigenvalues)
+
+        # Transform the data
+        transformed_data = eigenvectors * np.sqrt(eigenvalues)
+
+        return transformed_data, eigenvalues, eigenvectors
+
+    def _calculate_kernel(self, X, kernel='rbf', gamma=None, degree=3, coef0=1):
+        """
+        Calculate the kernel matrix using the specified kernel function.
+        """
+        if gamma is None:
+            gamma = 1.0 / self.n_features
+
         if kernel == 'rbf':
-            sq_dists = -2 * np.dot(X, X.T) + np.sum(X**2, axis=1).reshape(-1, 1) + np.sum(X**2, axis=1)
+            sq_dists = np.sum(X**2, axis=1).reshape(-1, 1) + \
+                       np.sum(X**2, axis=1) - 2 * np.dot(X, X.T)
             K = np.exp(-gamma * sq_dists)
         elif kernel == 'polynomial':
-            K = (np.dot(X, X.T) + 1) ** gamma
+            K = (gamma * np.dot(X, X.T) + coef0) ** degree
         elif kernel == 'sigmoid':
-            K = np.tanh(gamma * np.dot(X, X.T) + 1)
+            K = np.tanh(gamma * np.dot(X, X.T) + coef0)
         else:
-            raise ValueError('Unsupported kernel type.')
+            raise ValueError(f"Unsupported kernel: {kernel}")
+
         return K
 
-    def qr_algorithm(self, A, num_iterations=500):
-        # Реализация QR-алгоритма для поиска собственных значений и векторов
-        Ak = np.copy(A)
-        Q_total = np.eye(A.shape[0])
-        for _ in range(num_iterations):
-            Q, R = self.qr_decomposition(Ak)
-            Ak = np.dot(R, Q)
-            Q_total = np.dot(Q_total, Q)
-        eigenvalues = np.diag(Ak)
-        return eigenvalues, Q_total
+    def _center_kernel(self, K):
+        """
+        Center the kernel matrix K.
+        """
+        n = K.shape[0]
+        one_n = np.ones((n, n)) / n
+        K_centered = K - one_n @ K - K @ one_n + one_n @ K @ one_n
+        return K_centered
 
-    def qr_decomposition(self, A):
-        # Реализация разложения QR методом ортогонализации Грама-Шмидта
-        m, n = A.shape
-        Q = np.zeros((m, n))
-        R = np.zeros((n, n))
-        for i in range(n):
-            v = A[:, i]
-            for j in range(i):
-                R[j, i] = np.dot(Q[:, j], A[:, i])
-                v = v - R[j, i] * Q[:, j]
-            R[i, i] = np.linalg.norm(v)
-            Q[:, i] = v / R[i, i]
-        return Q, R
-
-    def power_iteration(self, A, num_eigenvectors, num_iterations=500):
-        # Метод мощности для вычисления наибольших собственных значений и векторов
-        n, m = A.shape
-        eigenvectors = np.zeros((m, num_eigenvectors))
-        eigenvalues = np.zeros(num_eigenvectors)
-        for i in range(num_eigenvectors):
-            b = np.random.rand(m)
-            for _ in range(num_iterations):
-                b = np.dot(A, b)
-                b = b / np.linalg.norm(b)
-            eigenvalue = np.dot(b.T, np.dot(A, b))
-            eigenvectors[:, i] = b
-            eigenvalues[i] = eigenvalue
-            A = A - eigenvalue * np.outer(b, b)  # Дефляция для следующего собственного значения
+    def _eigen_decomposition(self, K):
+        """
+        Compute the eigenvalues and eigenvectors of a symmetric matrix K.
+        """
+        eigenvalues, eigenvectors = np.linalg.eigh(K)
         return eigenvalues, eigenvectors
 
-    def transform_data(self, eigenvectors):
-        return np.dot(self.X, eigenvectors)
+    def qr_algorithm(self, A, num_iterations=1000):
+        """
+        QR algorithm for eigenvalue decomposition.
+        """
+        n = A.shape[0]
+        Ak = A.copy()
+        Q_total = np.eye(n)
+        for _ in range(num_iterations):
+            Q, R = self.qr_decomposition(Ak)
+            Ak = R @ Q
+            Q_total = Q_total @ Q
+        eigenvalues = np.diag(Ak)
+        eigenvectors = Q_total
+        return eigenvalues, eigenvectors
 
-    def get_top_components(self, eigenvectors, n_components):
-        return eigenvectors[:, :n_components]
-
-    def explained_variance(self, eigenvalues):
-        return eigenvalues / np.sum(eigenvalues)
+    def qr_decomposition(self, A):
+        """
+        QR decomposition using Householder reflections.
+        """
+        n = A.shape[0]
+        Q = np.eye(n)
+        R = A.copy()
+        for i in range(n - 1):
+            x = R[i:, i]
+            e1 = np.zeros_like(x)
+            e1[0] = np.linalg.norm(x)
+            u = x - e1
+            v = u / np.linalg.norm(u)
+            H = np.eye(n)
+            H_i = np.eye(len(x)) - 2.0 * np.outer(v, v)
+            H[i:, i:] = H_i
+            R = H @ R
+            Q = Q @ H.T
+        return Q, R
