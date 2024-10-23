@@ -2,46 +2,48 @@ import numpy as np
 
 class PCA:
     def __init__(self, X):
-        # Center the data
-        self.X = X - np.mean(X, axis=0)
+        # Центрируем данные и нормализуем их
+        self.X = (X - np.mean(X, axis=0)) / np.std(X, axis=0)
         self.n_samples, self.n_features = self.X.shape
 
-    def pca_qr(self, n_components=None, num_iterations=1000):
+    def pca_qr(self, n_components=None, num_iterations=1000, tol=1e-8):
         """
-        PCA using the QR algorithm to compute eigenvalues and eigenvectors of the covariance matrix.
+        PCA с использованием QR-алгоритма для нахождения собственных значений и собственных векторов ковариационной матрицы.
         """
-        # Compute the covariance matrix
+        # Вычисляем ковариационную матрицу
         cov_matrix = np.dot(self.X.T, self.X) / (self.n_samples - 1)
 
-        # Use QR algorithm to compute eigenvalues and eigenvectors
-        eigenvalues, eigenvectors = self.qr_algorithm(cov_matrix, num_iterations=num_iterations)
+        # Используем QR-алгоритм для нахождения собственных значений и векторов
+        eigenvalues, eigenvectors = self.qr_algorithm(cov_matrix, num_iterations=num_iterations, tol=tol)
 
-        # Sort eigenvalues and eigenvectors in descending order
+        # Сортируем собственные значения и векторы по убыванию
         idx = np.argsort(eigenvalues)[::-1]
         eigenvalues = eigenvalues[idx]
         eigenvectors = eigenvectors[:, idx]
 
-        # Select the top n_components
+        # Выбираем top n_components
         if n_components is not None:
             eigenvectors = eigenvectors[:, :n_components]
             eigenvalues = eigenvalues[:n_components]
 
-        # Transform the data
+        # Преобразуем данные
         transformed_data = np.dot(self.X, eigenvectors)
 
         return transformed_data, eigenvalues, eigenvectors
 
-
-    def qr_algorithm(self, A, num_iterations=1000):
+    def qr_algorithm(self, A, num_iterations=1000, tol=1e-8):
         """
-        QR algorithm for eigenvalue decomposition.
+        QR-алгоритм для нахождения собственных значений и векторов.
         """
         n = A.shape[0]
         Ak = A.copy()
         Q_total = np.eye(n)
         for _ in range(num_iterations):
             Q, R = self.qr_decomposition(Ak)
-            Ak = R @ Q
+            Ak_new = R @ Q
+            if np.allclose(Ak, Ak_new, atol=tol):  # Проверка на сходимость
+                break
+            Ak = Ak_new
             Q_total = Q_total @ Q
         eigenvalues = np.diag(Ak)
         eigenvectors = Q_total
@@ -49,7 +51,7 @@ class PCA:
 
     def qr_decomposition(self, A):
         """
-        QR decomposition using Householder reflections.
+        QR-разложение с использованием отражений Хаусхолдера.
         """
         n = A.shape[0]
         Q = np.eye(n)
