@@ -6,19 +6,41 @@ def f(x):
     return (x[0] ** 2 + (x[0] - x[1]) ** 2 + (x[1] - x[2]) ** 2 + x[2] ** 2) / 2 - x[0]
 
 
-def grad(x):
+def finite_difference(x):
+    h1 = np.array([1, 0, 0])
+    h2 = np.array([0, 1, 0])
+    h3 = np.array([0, 0, 1])
+    # h = np.array([3, 3, 3])
+    # return (f(x + h) - f(x)) / h
+
+    tmp = lambda x, h: (f(x + h) - f(x - h)) / (2 * h.max())
+
+    return np.array([tmp(x, h1), tmp(x, h2), tmp(x, h3)])
+
+
+def finite_difference2(x, i, j):
+    l = (f(x + i + j) - f(x + i)) / i.max()
+    r = (f(x - i + j) - f(x - i)) / i.max()
+    return (l - r) / j.max()
+
+
+def g(x):
     return np.array([2 * x[0] - x[1] - 1, -x[0] + 2 * x[1] - x[2], 2 * x[2] - x[1]])
 
 
-def bfgs(x=np.array([0, 0, 0]), epsilon=1e-5, c1=0.0001, c2=0.9, a_max=1, max_iter=1000, search_max_iter=100):
+def numerical_g(x):
+    return np.array(finite_difference(x))
+
+
+def bfgs(f, grad, initial_gesse, x, epsilon, c1, c2, a_max, max_iter, search_max_iter):
     I = np.eye(3)
-    H = I
+    H = initial_gesse
     for iter in range(max_iter):
         g = grad(x)
         if np.linalg.norm(g) < epsilon:
             break
         p = -H @ g
-        a = linear_step_size_search(x, p, c1, c2, a_max, search_max_iter)
+        a = linear_step_size_search(f, grad, x, p, c1, c2, a_max, search_max_iter)
         s = a * p
         new_x = x + s
         new_g = grad(new_x)
@@ -33,18 +55,18 @@ def bfgs(x=np.array([0, 0, 0]), epsilon=1e-5, c1=0.0001, c2=0.9, a_max=1, max_it
     return x, iter
 
 
-def lbfgs(x=np.array([0, 0, 0]), epsilon=1e-1, max_iter=2000, mem_limit=10):
+def lbfgs(grad, initial_gesse, x, epsilon, max_iter, mem_limit):
     I = np.eye(3)
     a = []
     s = []
     y = []
-    H = I
+    H = initial_gesse
     for iter in range(max_iter):
         g = grad(x)
         if np.linalg.norm(g) < epsilon:
             break
 
-        q = g
+        q = grad(x)
         for i in range(len(s) - 1, -1, -1):
             a[i] = (1 / (y[i] @ s[i])) * s[i] @ q
             q -= a[i] * y[i]
@@ -73,22 +95,22 @@ def lbfgs(x=np.array([0, 0, 0]), epsilon=1e-1, max_iter=2000, mem_limit=10):
     return x, iter
 
 
-def linear_step_size_search(x, p, c1, c2, a_max, max_iter):
+def linear_step_size_search(f, grad, x, p, c1, c2, a_max, max_iter):
     a = [0, (0 + a_max) / 2]
     for i in range(1, max_iter):
         approx_f_value = f(x + a[i] * p)
         if approx_f_value > f(x) + c1 * a[i] * grad(x).transpose() @ p or (approx_f_value >= f(x + a[i - 1] * p) and i > 1):
-            return zoom(x, p, a[i - 1], a[i], c1, c2)
+            return zoom(f, grad, x, p, a[i - 1], a[i], c1, c2)
         approx_grad_value = grad(x + a[i] * p)
         if np.linalg.norm(approx_grad_value) <= -c2 * np.linalg.norm(grad(x)):
             return a[i]
         if approx_grad_value.transpose() @ p >= 0:
-            return zoom(x, p, a[i - 1], a[i], c1, c2)
+            return zoom(f, grad, x, p, a[i - 1], a[i], c1, c2)
         a.append((a_max - a[i]) / 2 + a[i])
     return a[-1]
 
 
-def zoom(x, p, a_low, a_high, c1, c2):
+def zoom(f, grad, x, p, a_low, a_high, c1, c2):
     while True:
         a_j = (a_low + a_high) / 2
         if f(x + a_j * p) > f(x) + c1 * a_j * grad(x).transpose() @ p or f(x + a_j * p) >= f(x + a_low * p):
@@ -105,11 +127,64 @@ def zoom(x, p, a_low, a_high, c1, c2):
             return (a_low + a_high) / 2
 
 
-x, iter = bfgs()
-print(f'bfgs')
-print(f'Funtion min point = {x}; f(x) = {f(x)}. Finished in {iter} iterations.')
+x = np.array([5, 5, 5])
+gesse = np.array([
+    [
+        finite_difference2(x, np.array((1, 0, 0)), np.array((1, 0, 0))),
+        finite_difference2(x, np.array((1, 0, 0)), np.array((0, 1, 0))),
+        finite_difference2(x, np.array((1, 0, 0)), np.array((0, 0, 1)))
+    ],
+    [
+        finite_difference2(x, np.array((0, 1, 0)), np.array((1, 0, 0))),
+        finite_difference2(x, np.array((0, 1, 0)), np.array((0, 1, 0))),
+        finite_difference2(x, np.array((0, 1, 0)), np.array((0, 0, 1)))
+    ],
+    [
+        finite_difference2(x, np.array((0, 0, 1)), np.array((1, 0, 0))),
+        finite_difference2(x, np.array((0, 0, 1)), np.array((0, 1, 0))),
+        finite_difference2(x, np.array((0, 0, 1)), np.array((0, 0, 1)))
+    ]
+])
 
-x, iter = lbfgs()
-print(f'l-bfgs')
-print(f'Funtion min point = {x}; f(x) = {f(x)}. Finished in {iter} iterations.')
+epsilon = 1e-4
+c1 = 0.0001
+c2 = 0.9
+a_max = 1
+max_iter = 10000
+search_max_iter = 100
+mem_limit = 10
+initial_gesse = np.eye(3)
+analitic_gesse = np.array([
+    [0.75, 0.5, 0.25],
+    [0.5, 1, 0.5],
+    [0.25, 0.5, 0.75]
+])
 
+print("Task 1.1")
+print("Алгоритмы BFGS и L-BFGS применимы к этой задаче, так как функция f(x) является дважды дифференцируемой выпуклой функцией.")
+print()
+print("Task 1.2")
+
+point, iter = bfgs(f, g, initial_gesse, x, epsilon, c1, c2, a_max, max_iter, search_max_iter)
+print(f'BFGS (a) x={point}, f(x)={f(point)} iter={iter}')
+
+point, iter = bfgs(f, numerical_g, initial_gesse, x, epsilon, c1, c2, a_max, max_iter, search_max_iter)
+print(f'BFGS (b) x={point}, f(x)={f(point)} iter={iter}')
+
+point, iter = lbfgs(g, initial_gesse, x, epsilon, max_iter, mem_limit)
+print(f'L-BFGS (a) x={point}, f(x)={f(point)} iter={iter}')
+
+point, iter = lbfgs(numerical_g, initial_gesse, x, epsilon, max_iter, mem_limit)
+print(f'L-BFGS (b) x={point}, f(x)={f(point)} iter={iter}')
+print()
+print("Task 1.3")
+print("Approximate Gesse matrix")
+print(gesse)
+point, iter = bfgs(f, g, gesse, x, epsilon, c1, c2, a_max, max_iter, search_max_iter)
+print(f'BFGS x={point}, f(x)={f(point)} iter={iter}')
+print()
+print("Analitic Gesse matrix")
+print(analitic_gesse)
+point, iter = bfgs(f, g, analitic_gesse, x, epsilon, c1, c2, a_max, max_iter, search_max_iter)
+print(f'BFGS x={point}, f(x)={f(point)} iter={iter}')
+print()
