@@ -127,6 +127,18 @@ def zoom(f, grad, x, p, a_low, a_high, c1, c2):
             return (a_low + a_high) / 2
 
 
+def adam(grad, x, max_iter, learning_rate=0.1, beta1=0.9, beta2=0.999, eps=1e-8):
+    s = np.zeros(3)
+    v = np.zeros(3)
+
+    for t in range(max_iter):
+        g = grad(x)
+        s = beta1 * s + (1. - beta1) * g
+        v = beta2 * v + (1. - beta2) * g ** 2
+        x = x - learning_rate * s / (1. - beta1 ** (t + 1)) / (np.sqrt(v / (1. - beta2 ** (t + 1))) + eps)
+    return x, max_iter
+
+
 x = np.array([5, 5, 5])
 gesse = np.array([
     [
@@ -187,4 +199,7 @@ print("Analitic Gesse matrix")
 print(analitic_gesse)
 point, iter = bfgs(f, g, analitic_gesse, x, epsilon, c1, c2, a_max, max_iter, search_max_iter)
 print(f'BFGS x={point}, f(x)={f(point)} iter={iter}')
+print()
+point, iter = adam(numerical_g, x, max_iter)
+print(f'ADAM x={point}, f(x)={f(point)} iter={iter}')
 print()
