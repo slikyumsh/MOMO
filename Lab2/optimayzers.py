@@ -1,4 +1,5 @@
 import numpy as np
+import time
 
 def cross_entropy_loss(y_true, y_pred):
     m = y_true.shape[0]
@@ -45,40 +46,33 @@ def numerical_gradient(model, X, y, epsilon=1e-5):
 
 
 
-def bfgs_optimizer(model, X, y, num_iters=100):
-    # Инициализируем параметры для BFGS
+def bfgs_optimizer(model, X_train, y_train, num_iters=100):
     n_params = model.W.size + model.b.size
     xk = np.concatenate([model.W.flatten(), model.b.flatten()])
     Hk = np.eye(n_params)
     epsilon = 1e-5
     
-    for iter in range(num_iters):
-        # Вычисляем градиент
-        grad_W, grad_b = numerical_gradient(model, X, y, epsilon)
+    start_time = time.time()
+    
+    for iter in range(1, num_iters + 1):
+        grad_W, grad_b = numerical_gradient(model, X_train, y_train, epsilon)
         grad = np.concatenate([grad_W.flatten(), grad_b.flatten()])
         
-        # Проверяем условие остановки
         if np.linalg.norm(grad) < epsilon:
-            print(f'Сошлось на итерации {iter}')
             break
         
-        # Направление поиска
         pk = -Hk @ grad
         
-        # Линейный поиск (упрощенный)
-        alpha = 1e-3  # Маленький шаг
+        alpha = 1e-3  # Фиксированный шаг
         xk_new = xk + alpha * pk
         
-        # Обновление параметров
         sk = xk_new - xk
         xk = xk_new
         
-        # Обновляем параметры модели
         model.W = xk[:model.W.size].reshape(model.W.shape)
         model.b = xk[model.W.size:].reshape(model.b.shape)
         
-        # Вычисляем новый градиент
-        grad_W_new, grad_b_new = numerical_gradient(model, X, y, epsilon)
+        grad_W_new, grad_b_new = numerical_gradient(model, X_train, y_train, epsilon)
         grad_new = np.concatenate([grad_W_new.flatten(), grad_b_new.flatten()])
         
         yk = grad_new - grad
@@ -86,49 +80,38 @@ def bfgs_optimizer(model, X, y, num_iters=100):
         I = np.eye(n_params)
         Hk = (I - rho_k * np.outer(sk, yk)) @ Hk @ (I - rho_k * np.outer(yk, sk)) + rho_k * np.outer(sk, sk)
         
-        if iter % 10 == 0:
-            probs = model.softmax(model.forward(X))
-            loss = cross_entropy_loss(y, probs)
-            print(f'Итерация {iter}, Потери: {loss}')
-
-
-
-def lbfgs_optimizer(model, X, y, num_iters=100, m=10):
-    """
-    Реализует алгоритм L-BFGS для оптимизации параметров модели.
+        grad = grad_new  # Обновляем градиент
     
-    Параметры:
-    - model: экземпляр класса Perceptron.
-    - X: входные данные (numpy массив).
-    - y: метки классов (numpy массив).
-    - num_iters: количество итераций.
-    - m: количество последних пар (s_k, y_k) для хранения.
-    """
-    # Объединяем параметры модели в один вектор xk
+    total_time = time.time() - start_time
+    probs_train = model.softmax(model.forward(X_train))
+    final_loss = cross_entropy_loss(y_train, probs_train)
+    
+    # Добавьте оператор return
+    return final_loss, total_time
+
+
+def lbfgs_optimizer(model, X_train, y_train, num_iters=100, m=10):
     n_params = model.W.size + model.b.size
     xk = np.concatenate([model.W.flatten(), model.b.flatten()])
     
-    # Инициализируем градиент
     epsilon = 1e-5
-    grad_W, grad_b = numerical_gradient(model, X, y, epsilon)
+    grad_W, grad_b = numerical_gradient(model, X_train, y_train, epsilon)
     gk = np.concatenate([grad_W.flatten(), grad_b.flatten()])
     
-    # Инициализируем списки для хранения s_k и y_k
     s_list = []
     y_list = []
     
-    for iter in range(num_iters):
-        # Проверяем условие сходимости
+    start_time = time.time()
+    
+    for iter in range(1, num_iters + 1):
         if np.linalg.norm(gk) < epsilon:
-            print(f'Сошлось на итерации {iter}')
             break
         
-        # Двухцикловая рекурсия для вычисления направления поиска pk
         q = gk.copy()
         alpha_list = []
         rho_list = []
         
-        # Первый цикл: идем от последнего к первому
+        # Первый цикл
         for i in range(len(s_list)-1, -1, -1):
             s_i = s_list[i]
             y_i = y_list[i]
@@ -138,7 +121,6 @@ def lbfgs_optimizer(model, X, y, num_iters=100, m=10):
             alpha_list.append(alpha_i)
             q = q - alpha_i * y_i
         
-        # Инициализация H_0 (обычно берут скалярное произведение последних s и y)
         if len(s_list) > 0:
             gamma_k = (s_list[-1] @ y_list[-1]) / (y_list[-1] @ y_list[-1])
             Hk0 = gamma_k * np.eye(n_params)
@@ -147,101 +129,71 @@ def lbfgs_optimizer(model, X, y, num_iters=100, m=10):
         
         r = Hk0 @ q
         
-        # Второй цикл: идем от первого к последнему
+        # Второй цикл
         for i in range(len(s_list)):
             s_i = s_list[i]
             y_i = y_list[i]
-            rho_i = rho_list[-(i+1)]  # Инвертируем порядок
+            rho_i = rho_list[-(i+1)]
             alpha_i = alpha_list[-(i+1)]
             beta_i = rho_i * (y_i @ r)
             r = r + s_i * (alpha_i - beta_i)
         
-        pk = -r  # Направление поиска
+        pk = -r
         
-        # Линейный поиск для определения шага alpha
-        # Для простоты используем фиксированный шаг
-        alpha = 1e-3  # Маленький фиксированный шаг
-        
-        # Обновляем параметры
+        alpha = 1e-3  # Фиксированный шаг
         xk_new = xk + alpha * pk
-        sk = xk_new - xk  # Изменение параметров
-        
-        # Обновляем параметры модели
+        sk = xk_new - xk
         xk = xk_new
+        
         model.W = xk[:model.W.size].reshape(model.W.shape)
         model.b = xk[model.W.size:].reshape(model.b.shape)
         
-        # Вычисляем новый градиент
-        grad_W_new, grad_b_new = numerical_gradient(model, X, y, epsilon)
+        grad_W_new, grad_b_new = numerical_gradient(model, X_train, y_train, epsilon)
         gk_new = np.concatenate([grad_W_new.flatten(), grad_b_new.flatten()])
-        yk = gk_new - gk  # Разница градиентов
+        yk = gk_new - gk
         
-        # Обновляем списки s_k и y_k
         s_list.append(sk)
         y_list.append(yk)
         
-        # Храним только последние m пар
         if len(s_list) > m:
             s_list.pop(0)
             y_list.pop(0)
         
-        # Обновляем градиент для следующей итерации
-        gk = gk_new
-        
-        # Выводим информацию каждые 10 итераций
-        if iter % 10 == 0:
-            probs = model.softmax(model.forward(X))
-            loss = cross_entropy_loss(y, probs)
-            print(f'Итерация {iter}, Потери: {loss}')
+        gk = gk_new  # Обновляем градиент
+    
+    total_time = time.time() - start_time
+    probs_train = model.softmax(model.forward(X_train))
+    final_loss = cross_entropy_loss(y_train, probs_train)
+    
+    return final_loss, total_time
 
 
-
-
-def adam_optimizer(model, X, y, num_iters=100, learning_rate=0.01, beta1=0.9, beta2=0.999, epsilon=1e-8):
-    """
-    Реализует алгоритм Adam для оптимизации параметров модели с использованием численного градиента.
-
-    Параметры:
-    - model: экземпляр класса Perceptron.
-    - X: входные данные (numpy массив).
-    - y: метки классов (numpy массив).
-    - num_iters: количество итераций.
-    - learning_rate: скорость обучения.
-    - beta1: коэффициент экспоненциального сглаживания для первого момента.
-    - beta2: коэффициент экспоненциального сглаживания для второго момента.
-    - epsilon: малое число для избежания деления на ноль.
-    """
-    # Объединяем параметры модели в один вектор xk
+def adam_optimizer(model, X_train, y_train, num_iters=100, learning_rate=0.01, beta1=0.9, beta2=0.999, epsilon=1e-8):
     n_params = model.W.size + model.b.size
     xk = np.concatenate([model.W.flatten(), model.b.flatten()])
     
-    # Инициализируем моменты
-    m = np.zeros(n_params)  # Первый момент
-    v = np.zeros(n_params)  # Второй момент
+    m_t = np.zeros(n_params)
+    v_t = np.zeros(n_params)
+    
+    start_time = time.time()
     
     for iter in range(1, num_iters + 1):
-        # Вычисляем градиент
-        grad_W, grad_b = numerical_gradient(model, X, y)
+        grad_W, grad_b = numerical_gradient(model, X_train, y_train)
         grad = np.concatenate([grad_W.flatten(), grad_b.flatten()])
         
-        # Обновляем первый момент
-        m = beta1 * m + (1 - beta1) * grad
-        # Обновляем второй момент
-        v = beta2 * v + (1 - beta2) * (grad ** 2)
+        m_t = beta1 * m_t + (1 - beta1) * grad
+        v_t = beta2 * v_t + (1 - beta2) * (grad ** 2)
         
-        # Коррекция смещения моментов
-        m_hat = m / (1 - beta1 ** iter)
-        v_hat = v / (1 - beta2 ** iter)
+        m_hat = m_t / (1 - beta1 ** iter)
+        v_hat = v_t / (1 - beta2 ** iter)
         
-        # Обновление параметров
         xk = xk - learning_rate * m_hat / (np.sqrt(v_hat) + epsilon)
         
-        # Обновляем параметры модели
         model.W = xk[:model.W.size].reshape(model.W.shape)
         model.b = xk[model.W.size:].reshape(model.b.shape)
-        
-        # Каждые 10 итераций выводим информацию о потерях
-        if iter % 10 == 0:
-            probs = model.softmax(model.forward(X))
-            loss = cross_entropy_loss(y, probs)
-            print(f'Итерация {iter}, Потери: {loss}')
+    
+    total_time = time.time() - start_time
+    probs_train = model.softmax(model.forward(X_train))
+    final_loss = cross_entropy_loss(y_train, probs_train)
+    
+    return final_loss, total_time
