@@ -68,3 +68,7 @@ class PCA:
             R = H @ R
             Q = Q @ H.T
         return Q, R
+
+
+
+# Ассимптотика O(nd^2 + d^4)
