@@ -193,3 +193,55 @@ def lbfgs_optimizer(model, X, y, num_iters=100, m=10):
             probs = model.softmax(model.forward(X))
             loss = cross_entropy_loss(y, probs)
             print(f'Итерация {iter}, Потери: {loss}')
+
+
+
+
+def adam_optimizer(model, X, y, num_iters=100, learning_rate=0.01, beta1=0.9, beta2=0.999, epsilon=1e-8):
+    """
+    Реализует алгоритм Adam для оптимизации параметров модели с использованием численного градиента.
+
+    Параметры:
+    - model: экземпляр класса Perceptron.
+    - X: входные данные (numpy массив).
+    - y: метки классов (numpy массив).
+    - num_iters: количество итераций.
+    - learning_rate: скорость обучения.
+    - beta1: коэффициент экспоненциального сглаживания для первого момента.
+    - beta2: коэффициент экспоненциального сглаживания для второго момента.
+    - epsilon: малое число для избежания деления на ноль.
+    """
+    # Объединяем параметры модели в один вектор xk
+    n_params = model.W.size + model.b.size
+    xk = np.concatenate([model.W.flatten(), model.b.flatten()])
+    
+    # Инициализируем моменты
+    m = np.zeros(n_params)  # Первый момент
+    v = np.zeros(n_params)  # Второй момент
+    
+    for iter in range(1, num_iters + 1):
+        # Вычисляем градиент
+        grad_W, grad_b = numerical_gradient(model, X, y)
+        grad = np.concatenate([grad_W.flatten(), grad_b.flatten()])
+        
+        # Обновляем первый момент
+        m = beta1 * m + (1 - beta1) * grad
+        # Обновляем второй момент
+        v = beta2 * v + (1 - beta2) * (grad ** 2)
+        
+        # Коррекция смещения моментов
+        m_hat = m / (1 - beta1 ** iter)
+        v_hat = v / (1 - beta2 ** iter)
+        
+        # Обновление параметров
+        xk = xk - learning_rate * m_hat / (np.sqrt(v_hat) + epsilon)
+        
+        # Обновляем параметры модели
+        model.W = xk[:model.W.size].reshape(model.W.shape)
+        model.b = xk[model.W.size:].reshape(model.b.shape)
+        
+        # Каждые 10 итераций выводим информацию о потерях
+        if iter % 10 == 0:
+            probs = model.softmax(model.forward(X))
+            loss = cross_entropy_loss(y, probs)
+            print(f'Итерация {iter}, Потери: {loss}')
