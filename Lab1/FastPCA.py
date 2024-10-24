@@ -21,7 +21,7 @@ class PCASturm:
 
         # Сортируем собственные значения и векторы по убыванию
         idx = np.argsort(eigenvalues)[::-1]
-        eigenvalues = eigenvalues[idx]
+        eigenvalues = np.array(eigenvalues)[idx]
         eigenvectors = Q_tridiagonal @ eigenvectors[:, idx]
 
         # Выбираем top n_components
@@ -66,7 +66,7 @@ class PCASturm:
         for i, eigenvalue in enumerate(eigenvalues):
             eigenvectors[:, i] = self.find_eigenvector(T, eigenvalue, tol)
 
-        return np.array(eigenvalues), eigenvectors
+        return eigenvalues, eigenvectors
 
     def find_eigenvalues_sturm(self, T, tol=1e-8):
         """
@@ -74,41 +74,47 @@ class PCASturm:
         """
         n = T.shape[0]
         eigenvalues = []
-        # Простая реализация деления отрезка до нужной точности для поиска всех собственных значений
-        min_value = np.min(np.diag(T)) - 1
-        max_value = np.max(np.diag(T)) + 1
-        while len(eigenvalues) < n:
-            mid_value = (min_value + max_value) / 2
-            if self.sturm_count(T, mid_value) < n:
-                min_value = mid_value
-            else:
-                max_value = mid_value
-            if abs(max_value - min_value) < tol:
-                eigenvalues.append(mid_value)
-                min_value = mid_value + tol
-                max_value = np.max(np.diag(T)) + 1
-        return sorted(eigenvalues)
 
-    def sturm_count(self, T, x):
+        def bisect(a, b, count):
+            if count == 0 or (b - a) < tol:
+                if count > 0:
+                    eigenvalues.extend([(a + b) / 2] * count)
+                return
+            mid = (a + b) / 2
+            count_left = self.sturm_count(T, mid) - self.sturm_count(T, a)
+            bisect(a, mid, count_left)
+            bisect(mid, b, count - count_left)
+
+        lower_bound = np.min(np.diag(T)) - np.sum(np.abs(T))
+        upper_bound = np.max(np.diag(T)) + np.sum(np.abs(T))
+        total_eigenvalues = self.sturm_count(T, upper_bound) - self.sturm_count(T, lower_bound)
+        bisect(lower_bound, upper_bound, total_eigenvalues)
+        eigenvalues.sort()
+        return eigenvalues
+
+    def sturm_count(self, T, x, tol=1e-8):
         """
-        Подсчёт числа изменений знака для метода Штурма.
+        Подсчет числа собственных значений меньше x с использованием последовательности Штурма.
         """
         n = T.shape[0]
-        p0 = 1
-        p1 = T[0, 0] - x
-        count = 0 if p1 >= 0 else 1
+        diag = np.diag(T)
+        off_diag = np.diag(T, k=-1)
+        p = np.zeros(n)
+        p[0] = diag[0] - x
+        count = 0 if p[0] > 0 else 1
 
         for i in range(1, n):
-            p2 = (T[i, i] - x) - (T[i, i - 1] ** 2) / p1
-            if p2 < 0 and p1 >= 0 or p2 >= 0 and p1 < 0:
+            denom = p[i - 1]
+            if abs(denom) < tol:
+                denom = tol
+            p[i] = (diag[i] - x) - (off_diag[i - 1] ** 2) / denom
+            if p[i] * p[i - 1] < 0:
                 count += 1
-            p1 = p2
-
         return count
 
     def find_eigenvector(self, T, eigenvalue, tol=1e-8):
         """
-        Поиск собственных векторов для заданного собственного значения.
+        Поиск собственного вектора для заданного собственного значения с использованием обратных итераций.
         """
         n = T.shape[0]
         b = T - np.eye(n) * eigenvalue
@@ -116,13 +122,15 @@ class PCASturm:
         q /= np.linalg.norm(q)
 
         for _ in range(1000):
-            q_new = np.linalg.solve(b, q)
-            q_new /= np.linalg.norm(q_new)
+            try:
+                z = np.linalg.solve(b, q)
+            except np.linalg.LinAlgError:
+                z = np.linalg.lstsq(b, q, rcond=None)[0]
+            q_new = z / np.linalg.norm(z)
             if np.linalg.norm(q - q_new) < tol:
                 break
             q = q_new
 
-        return q
-
+        return q_new
 
 # Ассимптотика O(nd^2 + d^3)
