@@ -48,7 +48,6 @@ def bfgs(f, grad, initial_gesse, x, epsilon, c1, c2, a_max, max_iter, search_max
 
         # y.transpose() here has no effect ; (3,) -> (3,)
         q = (1. / (y.transpose() @ s))
-        # Might be error. Exists variation where second np.outer must be (y,s) instead of what in formula in lab2
         H = (I - q * np.outer(s, y)) @ H @ (I - q * np.outer(s, y)) + q * np.outer(s, s)
         x = new_x
 
