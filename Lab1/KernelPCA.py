@@ -1,7 +1,6 @@
 import numpy as np
 
 def center_kernel(K):
-    """Центрирование матрицы ядра."""
     n = K.shape[0]
     one_n = np.ones((n, n)) / n
     K_centered = K - one_n @ K - K @ one_n + one_n @ K @ one_n
@@ -56,7 +55,6 @@ def compute_top_eigenpairs(A, n_components, num_iterations=1000, tol=1e-6):
         eigenvalue, eigenvector = power_iteration(A_copy, num_iterations, tol)
         eigenvalues.append(eigenvalue)
         eigenvectors.append(eigenvector)
-        # Дефляция матрицы
         A_copy -= eigenvalue * np.outer(eigenvector, eigenvector)
     eigenvalues = np.array(eigenvalues)
     eigenvectors = np.array(eigenvectors).T  # Транспонируем для согласованности
@@ -66,20 +64,13 @@ def kernel_pca(X, kernel_function, n_components=2, num_iterations=1000, tol=1e-6
     """
     Реализация Kernel PCA с использованием собственного метода нахождения собственных чисел.
     """
-    # Вычисляем матрицу ядра
+   
     K = kernel_function(X)
-    
-    # Центрируем матрицу ядра
     K_centered = center_kernel(K)
-    
-    # Находим собственные значения и векторы
     eigvals, eigvecs = compute_top_eigenpairs(K_centered, n_components, num_iterations, tol)
-    
-    # Нормируем собственные векторы
     for i in range(n_components):
         eigvecs[:, i] /= np.sqrt(eigvals[i])
     
-    # Проецируем данные
     X_pc = K_centered @ eigvecs
     
     return X_pc

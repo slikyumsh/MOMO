@@ -3,10 +3,10 @@ import time
 
 def cross_entropy_loss(y_true, y_pred):
     m = y_true.shape[0]
-    # Создаем one-hot представление меток
+
     y_true_one_hot = np.zeros_like(y_pred)
     y_true_one_hot[np.arange(m), y_true] = 1
-    # Вычисляем потери
+
     loss = -np.sum(y_true_one_hot * np.log(y_pred + 1e-15)) / m
     return loss
 
@@ -17,11 +17,9 @@ def numerical_gradient(model, X, y, epsilon=1e-5):
     grad_W = np.zeros_like(W)
     grad_b = np.zeros_like(b)
     
-    # Вычисляем потери при текущих параметрах
     probs = model.softmax(model.forward(X))
     loss = cross_entropy_loss(y, probs)
     
-    # Градиент по W
     for i in range(W.shape[0]):
         for j in range(W.shape[1]):
             W_eps = W.copy()
@@ -30,9 +28,8 @@ def numerical_gradient(model, X, y, epsilon=1e-5):
             probs_eps = model.softmax(model.forward(X))
             loss_eps = cross_entropy_loss(y, probs_eps)
             grad_W[i, j] = (loss_eps - loss) / epsilon
-    model.W = W  # Восстанавливаем W
+    model.W = W  
     
-    # Градиент по b
     for j in range(b.shape[1]):
         b_eps = b.copy()
         b_eps[0, j] += epsilon
@@ -40,7 +37,7 @@ def numerical_gradient(model, X, y, epsilon=1e-5):
         probs_eps = model.softmax(model.forward(X))
         loss_eps = cross_entropy_loss(y, probs_eps)
         grad_b[0, j] = (loss_eps - loss) / epsilon
-    model.b = b  # Восстанавливаем b
+    model.b = b  
     
     return grad_W, grad_b
 
@@ -80,13 +77,12 @@ def bfgs_optimizer(model, X_train, y_train, num_iters=100):
         I = np.eye(n_params)
         Hk = (I - rho_k * np.outer(sk, yk)) @ Hk @ (I - rho_k * np.outer(yk, sk)) + rho_k * np.outer(sk, sk)
         
-        grad = grad_new  # Обновляем градиент
+        grad = grad_new 
     
     total_time = time.time() - start_time
     probs_train = model.softmax(model.forward(X_train))
     final_loss = cross_entropy_loss(y_train, probs_train)
     
-    # Добавьте оператор return
     return final_loss, total_time
 
 
@@ -111,7 +107,7 @@ def lbfgs_optimizer(model, X_train, y_train, num_iters=100, m=10):
         alpha_list = []
         rho_list = []
         
-        # Первый цикл
+    
         for i in range(len(s_list)-1, -1, -1):
             s_i = s_list[i]
             y_i = y_list[i]
@@ -128,8 +124,7 @@ def lbfgs_optimizer(model, X_train, y_train, num_iters=100, m=10):
             Hk0 = np.eye(n_params)
         
         r = Hk0 @ q
-        
-        # Второй цикл
+  
         for i in range(len(s_list)):
             s_i = s_list[i]
             y_i = y_list[i]
@@ -159,7 +154,7 @@ def lbfgs_optimizer(model, X_train, y_train, num_iters=100, m=10):
             s_list.pop(0)
             y_list.pop(0)
         
-        gk = gk_new  # Обновляем градиент
+        gk = gk_new
     
     total_time = time.time() - start_time
     probs_train = model.softmax(model.forward(X_train))

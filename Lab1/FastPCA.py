@@ -2,7 +2,6 @@ import numpy as np
 
 class PCASturm:
     def __init__(self, X):
-        # Центрируем данные и нормализуем их
         self.X = (X - np.mean(X, axis=0)) / np.std(X, axis=0)
         self.n_samples, self.n_features = self.X.shape
 
@@ -10,26 +9,17 @@ class PCASturm:
         """
         PCA с использованием метода Штурма для нахождения собственных значений и векторов ковариационной матрицы.
         """
-        # Вычисляем ковариационную матрицу
         cov_matrix = np.dot(self.X.T, self.X) / (self.n_samples - 1)
-
-        # Преобразуем ковариационную матрицу в тридиагональную форму
         tridiagonal_matrix, Q_tridiagonal = self.tridiagonalize(cov_matrix)
-
-        # Используем метод Штурма для нахождения собственных значений и векторов
         eigenvalues, eigenvectors = self.sturm_method(tridiagonal_matrix, tol=tol)
-
-        # Сортируем собственные значения и векторы по убыванию
         idx = np.argsort(eigenvalues)[::-1]
         eigenvalues = np.array(eigenvalues)[idx]
         eigenvectors = Q_tridiagonal @ eigenvectors[:, idx]
 
-        # Выбираем top n_components
         if n_components is not None:
             eigenvectors = eigenvectors[:, :n_components]
             eigenvalues = eigenvalues[:n_components]
 
-        # Преобразуем данные
         transformed_data = np.dot(self.X, eigenvectors)
 
         return transformed_data, eigenvalues, eigenvectors
