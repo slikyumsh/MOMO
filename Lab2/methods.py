@@ -10,8 +10,6 @@ def finite_difference(x):
     h1 = np.array([1, 0, 0])
     h2 = np.array([0, 1, 0])
     h3 = np.array([0, 0, 1])
-    # h = np.array([3, 3, 3])
-    # return (f(x + h) - f(x)) / h
 
     tmp = lambda x, h: (f(x + h) - f(x - h)) / (2 * h.max())
 
@@ -46,7 +44,6 @@ def bfgs(f, grad, initial_gesse, x, epsilon, c1, c2, a_max, max_iter, search_max
         new_g = grad(new_x)
         y = new_g - g
 
-        # y.transpose() here has no effect ; (3,) -> (3,)
         q = (1. / (y.transpose() @ s))
         H = (I - q * np.outer(s, y)) @ H @ (I - q * np.outer(s, y)) + q * np.outer(s, s)
         x = new_x
