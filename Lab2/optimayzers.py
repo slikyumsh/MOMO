@@ -16,10 +16,10 @@ def numerical_gradient(model, X, y, epsilon=1e-5):
     b = model.b
     grad_W = np.zeros_like(W)
     grad_b = np.zeros_like(b)
-    
+
     probs = model.softmax(model.forward(X))
     loss = cross_entropy_loss(y, probs)
-    
+
 
     for i in range(W.shape[0]):
         for j in range(W.shape[1]):
@@ -29,9 +29,9 @@ def numerical_gradient(model, X, y, epsilon=1e-5):
             probs_eps = model.softmax(model.forward(X))
             loss_eps = cross_entropy_loss(y, probs_eps)
             grad_W[i, j] = (loss_eps - loss) / epsilon
-    model.W = W 
-    
-   
+    model.W = W
+
+
     for j in range(b.shape[1]):
         b_eps = b.copy()
         b_eps[0, j] += epsilon
@@ -39,8 +39,8 @@ def numerical_gradient(model, X, y, epsilon=1e-5):
         probs_eps = model.softmax(model.forward(X))
         loss_eps = cross_entropy_loss(y, probs_eps)
         grad_b[0, j] = (loss_eps - loss) / epsilon
-    model.b = b 
-    
+    model.b = b
+
     return grad_W, grad_b
 
 
@@ -53,7 +53,7 @@ def bfgs_optimizer(model, X_train, y_train, num_iters=100):
 
     start_time = time.time()
 
-    for iter in range(1, num_iters + 1):
+    for _ in range(1, num_iters + 1):
         grad_W, grad_b = numerical_gradient(model, X_train, y_train, epsilon)
         grad = np.concatenate([grad_W.flatten(), grad_b.flatten()])
 
@@ -62,7 +62,7 @@ def bfgs_optimizer(model, X_train, y_train, num_iters=100):
 
         pk = -Hk @ grad
 
-        alpha = 1e-3  # Фиксированный шаг
+        alpha = 1e-3
         xk_new = xk + alpha * pk
 
         sk = xk_new - xk
@@ -78,9 +78,9 @@ def bfgs_optimizer(model, X_train, y_train, num_iters=100):
         rho_k = 1.0 / (yk @ sk)
         I = np.eye(n_params)
         Hk = (I - rho_k * np.outer(sk, yk)) @ Hk @ (I - rho_k * np.outer(yk, sk)) + rho_k * np.outer(sk, sk)
-        
-        grad = grad_new  
-    
+
+        grad = grad_new
+
     total_time = time.time() - start_time
     probs_train = model.softmax(model.forward(X_train))
     final_loss = cross_entropy_loss(y_train, probs_train)
@@ -101,7 +101,7 @@ def lbfgs_optimizer(model, X_train, y_train, num_iters=100, m=10):
 
     start_time = time.time()
 
-    for iter in range(1, num_iters + 1):
+    for _ in range(1, num_iters + 1):
         if np.linalg.norm(gk) < epsilon:
             break
 
@@ -136,7 +136,7 @@ def lbfgs_optimizer(model, X_train, y_train, num_iters=100, m=10):
 
         pk = -r
 
-        alpha = 1e-3  # Фиксированный шаг
+        alpha = 1e-3
         xk_new = xk + alpha * pk
         sk = xk_new - xk
         xk = xk_new
@@ -154,9 +154,9 @@ def lbfgs_optimizer(model, X_train, y_train, num_iters=100, m=10):
         if len(s_list) > m:
             s_list.pop(0)
             y_list.pop(0)
-        
-        gk = gk_new  
-    
+
+        gk = gk_new
+
     total_time = time.time() - start_time
     probs_train = model.softmax(model.forward(X_train))
     final_loss = cross_entropy_loss(y_train, probs_train)

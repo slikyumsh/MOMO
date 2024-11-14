@@ -9,12 +9,12 @@ def center_kernel(K):
 def power_iteration(A, num_iterations=1000, tol=1e-6):
     """
     Степенной метод для нахождения наибольшего собственного значения и собственного вектора.
-    
+
     Параметры:
     - A: симметричная матрица
     - num_iterations: максимальное число итераций
     - tol: допустимая погрешность
-    
+
     Возвращает:
     - наибольшее собственное значение
     - соответствующий нормированный собственный вектор
@@ -36,13 +36,13 @@ def power_iteration(A, num_iterations=1000, tol=1e-6):
 def compute_top_eigenpairs(A, n_components, num_iterations=1000, tol=1e-6):
     """
     Нахождение нескольких наибольших собственных значений и векторов.
-    
+
     Параметры:
     - A: симметричная матрица
     - n_components: количество требуемых собственных пар
     - num_iterations: максимальное число итераций для степенного метода
     - tol: допустимая погрешность
-    
+
     Возвращает:
     - массив собственных значений
     - матрицу собственных векторов
@@ -64,15 +64,15 @@ def kernel_pca(X, kernel_function, n_components=2, num_iterations=1000, tol=1e-6
     """
     Реализация Kernel PCA с использованием собственного метода нахождения собственных чисел.
     """
-   
+
     K = kernel_function(X)
     K_centered = center_kernel(K)
     eigvals, eigvecs = compute_top_eigenpairs(K_centered, n_components, num_iterations, tol)
     for i in range(n_components):
         eigvecs[:, i] /= np.sqrt(eigvals[i])
-    
+
     X_pc = K_centered @ eigvecs
-    
+
     return X_pc
 
 
